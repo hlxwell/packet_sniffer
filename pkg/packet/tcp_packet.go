@@ -1,9 +1,15 @@
-package util
+package packet
 
 import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
+	"math/rand"
+	"net"
+	"syscall"
+
+	"golang.org/x/net/ipv4"
 )
 
 const (
@@ -15,6 +21,7 @@ const (
 	URG = 32 // 10 0000
 )
 
+// TCPHeader Struct
 type TCPHeader struct {
 	Source      uint16
 	Destination uint16
@@ -30,13 +37,14 @@ type TCPHeader struct {
 	Options     []TCPOption
 }
 
+// TCPOption struct
 type TCPOption struct {
 	Kind   uint8
 	Length uint8
 	Data   []byte
 }
 
-// Parse packet into TCPHeader structure
+// NewTCPHeader will parse packet into TCPHeader structure
 func NewTCPHeader(data []byte) *TCPHeader {
 	var tcp TCPHeader
 	r := bytes.NewReader(data)
@@ -62,6 +70,7 @@ func NewTCPHeader(data []byte) *TCPHeader {
 func (tcp *TCPHeader) HasFlag(flagBit byte) bool {
 	return tcp.Ctrl&flagBit != 0
 }
+
 func (tcp *TCPHeader) String() string {
 	if tcp == nil {
 		return "<nil>"
@@ -70,7 +79,6 @@ func (tcp *TCPHeader) String() string {
 }
 
 func (tcp *TCPHeader) Marshal() []byte {
-
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, tcp.Source)
 	binary.Write(buf, binary.BigEndian, tcp.Destination)
@@ -141,6 +149,60 @@ func Csum(data []byte, srcip, dstip [4]byte) uint16 {
 
 	// Bitwise complement
 	return uint16(^sum)
+}
+
+func SendTCPPacket() {
+	ipHeader := ipv4.Header{
+		Version:  4,
+		Len:      20,
+		TotalLen: 60 + 20, // 20 bytes for IP, 10 for ICMP
+		TTL:      64,
+		Protocol: 6, // ICMP-1, TCP-6
+		Dst:      net.IPv4(127, 0, 0, 1),
+		// ID, Src and Checksum will be set for us by the kernel
+	}
+
+	tcpHeader := TCPHeader{
+		Source:      0xaaaa, // Random ephemeral port
+		Destination: 8888,
+		SeqNum:      rand.Uint32(),
+		AckNum:      0,
+		DataOffset:  21,     // 4 bits
+		Reserved:    0,      // 3 bits
+		ECN:         0,      // 3 bits
+		Ctrl:        2,      // 6 bits (000010, SYN bit set)
+		Window:      0xffff, // size of your receive window
+		Checksum:    0,      // Kernel will set this if it's 0
+		Urgent:      0,
+		Options:     []TCPOption{},
+	}
+
+	// Make the packet
+	ipHeaderBytes, err := ipHeader.Marshal()
+	if err != nil {
+		log.Fatal(err)
+	}
+	tcpHeaderBytes := tcpHeader.Marshal()
+	tcpHeader.Checksum = Csum(tcpHeaderBytes, [4]byte{127, 0, 0, 1}, [4]byte{127, 0, 0, 1})
+	tcpHeaderBytes = tcpHeader.Marshal()
+
+	var packet []byte
+	packet = append(ipHeaderBytes, tcpHeaderBytes...)
+	packet = append(packet, []byte("sbibits")...)
+
+	// Send packet
+	fd, _ := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
+	defer syscall.Shutdown(fd, syscall.SHUT_RDWR)
+
+	addr := syscall.SockaddrInet4{
+		Port: 0,
+		Addr: [4]byte{127, 0, 0, 1},
+	}
+	err = syscall.Sendto(fd, packet, 0, &addr)
+	if err != nil {
+		log.Fatal("Sendto: ", err)
+	}
+	fmt.Println("Finished sending...")
 }
 
 // func Csum(b []byte) uint16 {
