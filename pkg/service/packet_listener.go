@@ -6,7 +6,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/hlxwell/l4_packet_sniffer/pkg/packet"
+	"github.com/hlxwell/packet_sniffer/pkg/packet"
 	"golang.org/x/net/ipv4"
 )
 

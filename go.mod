@@ -1,4 +1,4 @@
-module github.com/hlxwell/l4_packet_sniffer
+module github.com/hlxwell/packet_sniffer
 
 go 1.13
 

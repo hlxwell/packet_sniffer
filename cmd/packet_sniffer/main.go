@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/gopacket/pcap"
-	"github.com/hlxwell/l4_packet_sniffer/pkg/service"
+	"github.com/hlxwell/packet_sniffer/pkg/service"
 )
 
 func main() {
